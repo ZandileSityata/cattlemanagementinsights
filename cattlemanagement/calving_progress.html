@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calving Progress</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #D6BD98;
+            color: #1A3636;
+        }
+        header {
+            background-color: #1A3636;
+            color: #D6BD98;
+            padding: 1em 0;
+            text-align: center;
+        }
+        nav {
+            background-color: #40534C;
+            overflow: hidden;
+        }
+        nav a {
+            float: left;
+            display: block;
+            color: #D6BD98;
+            text-align: center;
+            padding: 14px 16px;
+            text-decoration: none;
+        }
+        nav a:hover {
+            background-color: #1A3636;
+            color: #D6BD98;
+        }
+        .container {
+            max-width: 800px;
+            margin: 2em auto;
+            padding: 1em;
+            background-color: #40534C;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            color: #D6BD98;
+        }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 2em;
+        }
+        table, th, td {
+            border: 1px solid #40534C;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #1A3636;
+            color: #D6BD98;
+        }
+        input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 5px;
+            border: 1px solid #677D6A;
+            border-radius: 4px;
+            background-color: #D6BD98;
+            color: #1A3636;
+        }
+        .save-button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #1A3636;
+            color: #D6BD98;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .save-button:hover {
+            background-color: #40534C;
+        }
+        .status-message {
+            margin-top: 10px;
+            color: #D6BD98;
+            font-weight: bold;
+        }
+        .chart-container {
+            margin: 2em 0;
+        }
+        canvas {
+            width: 100% !important;
+            height: auto !important;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Cattle Management Tool</h1>
+    </header>
+    <nav>
+        <a href="cattleinsights.html" id="add-cattle-nav">Add Cattle Data</a>
+        <a href="calving_progress.html" id="track-calving-nav">Track Calving Females</a>
+        <a href="track_weight.html" id="track-weight-nav">Weight Tracking</a>
+    </nav>
+    <div class="container">
+        <h1>Calving Progress Over 6 Years</h1>
+        <table>
+            <thead>
+                <tr>
+                    <th>Cattle ID</th>
+                    <th>Calving Status</th>
+                    <th>Year 1</th>
+                    <th>Year 2</th>
+                    <th>Year 3</th>
+                    <th>Year 4</th>
+                    <th>Year 5</th>
+                    <th>Year 6</th>
+                    <th>Male Calves</th>
+                    <th>Female Calves</th>
+                    <th>Total Calves</th>
+                </tr>
+            </thead>
+            <tbody id="cattle-data">
+                <!-- Data rows will be dynamically inserted here -->
+            </tbody>
+        </table>
+        <button id="save-button" class="save-button">Save Changes</button>
+        <div id="status-message" class="status-message"></div>
+        
+        <div class="chart-container">
+            <h2>Productivity of Female Cattle</h2>
+            <canvas id="productivityChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script>
+        const cattleData = JSON.parse(localStorage.getItem('cattleData')) || [];
+        const cattleTableBody = document.getElementById('cattle-data');
+        const statusMessage = document.getElementById('status-message');
+        const saveButton = document.getElementById('save-button');
+        const ctx = document.getElementById('productivityChart').getContext('2d');
+        
+        function renderCattleData() {
+            cattleTableBody.innerHTML = '';
+            cattleData.filter(cattle => cattle.gender === 'F').forEach(cattle => {
+                const maleCalves = cattle.maleCalves || '';
+                const femaleCalves = cattle.femaleCalves || '';
+                const totalCalves = (parseInt(maleCalves) || 0) + (parseInt(femaleCalves) || 0);
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${cattle.id}</td>
+                    <td>${cattle.calving}</td>
+                    <td><input type="text" data-year="1" value="${cattle.year1 || ''}"></td>
+                    <td><input type="text" data-year="2" value="${cattle.year2 || ''}"></td>
+                    <td><input type="text" data-year="3" value="${cattle.year3 || ''}"></td>
+                    <td><input type="text" data-year="4" value="${cattle.year4 || ''}"></td>
+                    <td><input type="text" data-year="5" value="${cattle.year5 || ''}"></td>
+                    <td><input type="text" data-year="6" value="${cattle.year6 || ''}"></td>
+                    <td><input type="number" data-type="maleCalves" value="${maleCalves}"></td>
+                    <td><input type="number" data-type="femaleCalves" value="${femaleCalves}"></td>
+                    <td>${totalCalves}</td>
+                `;
+                cattleTableBody.appendChild(row);
+            });
+            renderProductivityChart();
+        }
+
+        function saveCalvingData() {
+            const updatedCattleData = cattleData.map(cattle => {
+                const row = Array.from(cattleTableBody.querySelectorAll('tr')).find(row => row.cells[0].textContent === cattle.id);
+                if (row) {
+                    for (let year = 1; year <= 6; year++) {
+                        const input = row.querySelector(`input[data-year="${year}"]`);
+                        cattle[`year${year}`] = input ? input.value : '';
+                    }
+                    cattle.maleCalves = row.querySelector('input[data-type="maleCalves"]').value || '';
+                    cattle.femaleCalves = row.querySelector('input[data-type="femaleCalves"]').value || '';
+                }
+                return cattle;
+            });
+
+            localStorage.setItem('cattleData', JSON.stringify(updatedCattleData));
+            statusMessage.textContent = 'Changes saved successfully!';
+            setTimeout(() => { statusMessage.textContent = ''; }, 3000);
+        }
+
+        function renderProductivityChart() {
+            const femaleCattle = cattleData.filter(cattle => cattle.gender === 'F');
+            const labels = femaleCattle.map(cattle => cattle.id);
+            const data = femaleCattle.map(cattle => (parseInt(cattle.maleCalves) || 0) + (parseInt(cattle.femaleCalves) || 0));
+            
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Total Calves Birthed',
+                        data: data,
+                        backgroundColor: '#1A3636',
+                        borderColor: '#40534C',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: {
+                            beginAtZero: true
+                        },
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        renderCattleData();
+        saveButton.addEventListener('click', saveCalvingData);
+    </script>
+</body>
+</html>
